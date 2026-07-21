@@ -358,7 +358,10 @@ fn decode_chunk_4(
 mod tests {
     use super::*;
 
-    use crate::engine::general_purpose::STANDARD;
+    use crate::engine::{
+        general_purpose::{GeneralPurpose, STANDARD, STANDARD_NO_PAD},
+        Engine,
+    };
 
     #[test]
     fn decode_chunk_8_writes_only_6_bytes() {
@@ -410,5 +413,27 @@ mod tests {
                     estimate.conservative_decoded_len as u128
                 );
             })
+    }
+
+    #[test]
+    fn suffix_length_matches_verus_bridge_through_public_decode_slice() {
+        let cases: [(&GeneralPurpose, &[u8], &[u8]); 7] = [
+            (&STANDARD, b"", &[]),
+            (&STANDARD, b"AAAA/w==", &[0, 0, 0, 0xff]),
+            (&STANDARD, b"AAAAiYU=", &[0, 0, 0, 0x89, 0x85]),
+            (&STANDARD, b"AAAAAAAA", &[0, 0, 0, 0, 0, 0]),
+            (&STANDARD_NO_PAD, b"AAAA/w", &[0, 0, 0, 0xff]),
+            (&STANDARD_NO_PAD, b"AAAAiYU", &[0, 0, 0, 0x89, 0x85]),
+            (&STANDARD_NO_PAD, b"AAAAAAAA", &[0, 0, 0, 0, 0, 0]),
+        ];
+
+        for &(engine, encoded, expected) in cases.iter() {
+            let mut output = [0xa5; 7];
+            let decoded_len = engine.decode_slice(encoded, &mut output).unwrap();
+
+            assert_eq!(expected.len(), decoded_len);
+            assert_eq!(expected, &output[..decoded_len]);
+            assert_eq!(0xa5, output[decoded_len]);
+        }
     }
 }
